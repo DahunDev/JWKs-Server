@@ -1,7 +1,7 @@
 package com.daniel.Main;
 
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -14,10 +14,9 @@ import java.security.NoSuchAlgorithmException;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.util.Date;
-import java.util.UUID;
 
-import org.junit.Test;
-
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
@@ -49,10 +48,23 @@ public class AuthEndpoint implements HttpHandler {
 	
 	@Override
 	public void handle(HttpExchange exchange) throws IOException {
+		String IP = exchange.getRemoteAddress().getAddress().getHostAddress();
+		assertNotNull(JwtsServer.rateLimiter);
+		
+		if(!JwtsServer.rateLimiter.allowRequest()) {
+			System.out.println("Too many request");
+			exchange.sendResponseHeaders(429, -1); //send message too many request
+			exchange.close();
+			
+			return; //return rate limited
+		}else {
+			System.out.println("Okay to request");
+		}
+
 
 		String para = exchange.getRequestURI().getQuery();
 
-		System.out.println("para: " + para);
+	//	System.out.println("para in auth: " + para);
 		
 		// this portion gives 1 points (start)
 		// Create a BufferedReader to read the content
@@ -63,27 +75,34 @@ public class AuthEndpoint implements HttpHandler {
 		BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
 
 		// Read and print each line of the content
+		StringBuilder requestbody = new StringBuilder();
 		String line;
-		System.out.println("getRequestBody:");
 		while ((line = reader.readLine()) != null) {
-			System.out.println(line);
+			requestbody.append(line);
 		}
 
 		// Close the reader and the input stream
 		reader.close();
 		inputStream.close();
-		
+				
 
 		if (exchange.getRequestMethod().equalsIgnoreCase("POST")) {
 			// https://www.viralpatel.net/java-create-validate-jwt-token/
 			KeyPair kp = generateKeyPair();
-		
-			String username = "userABC";
+			ObjectMapper objectMapper = new ObjectMapper();
+			long currentTime = System.currentTimeMillis();
+			JsonNode jsonNode = objectMapper.readTree(requestbody.toString());
+			String username = jsonNode.get("username").asText();
+			assertNotNull(username);
+				
+			int userID = Database.getUserIDfromDB("totally_not_my_privateKeys.db", username);
+		//	System.out.println("username: " + username + "   IP:" + IP + " userID="+ userID);
+
 			SignatureAlgorithm signatureAlgorithm = SignatureAlgorithm.RS256;
 
 			String jwtToken;
 			if (isExpiredParm(para)) {
-				System.out.println("expired para is true");
+				//System.out.println("expired para is true");
 				KeyPairInfo info = null;
 				
 				for(KeyPairInfo entry : JwtsServer.getkeyPairs().values()) {
@@ -104,11 +123,12 @@ public class AuthEndpoint implements HttpHandler {
 							.setHeaderParam("typ", "JWT") // Header with token type
 							.setHeaderParam("kid", info.getKid() + "")
 							.setSubject("userABC").signWith(signatureAlgorithm, info.getPrivateKey()).
-							setExpiration(info.getExpiry()).compact();					
+							setExpiration(info.getExpiry()).compact();		
+					assertNotNull(jwtToken);
 				}
 
 			} else {
-				System.out.println("expired para is false");
+			//	System.out.println("expired para is false");
 
 				KeyPairInfo info = null;
 				
@@ -139,20 +159,27 @@ public class AuthEndpoint implements HttpHandler {
 			}
 			System.out.println("issued token\n");
 			// String response = "JWT Token: " + jwtToken;
+			long start = System.currentTimeMillis();
+			Database.updateAuthLogs("totally_not_my_privateKeys.db", IP, userID, currentTime);
+			long end = System.currentTimeMillis();
+			System.out.println("took for log db: " + (end - start));
+			
 			exchange.sendResponseHeaders(200, jwtToken.getBytes().length);
 			System.out.println("response auth: " + jwtToken);
 			OutputStream output = exchange.getResponseBody();
 			output.write(jwtToken.getBytes());
 			output.flush();
 			exchange.close();
+			
 
-			System.out.println("End Auth\n");
+			//System.out.println("End Auth\n");
 
 		} else {
 			// Method not allowed
 			exchange.sendResponseHeaders(405, -1);
+			exchange.close();
 
-			System.out.println("End Auth\n");
+		//	System.out.println("End Auth\n");
 
 		}
 	}

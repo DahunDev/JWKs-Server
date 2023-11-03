@@ -23,17 +23,24 @@ public class JwtsServer {
 	
 	private static Map<Integer, KeyPairInfo> keyPairs = new HashMap<>();
 	public static int maxKid = 0;
+	public static String secretKey;
+	public static TimeWindowRateLimiter rateLimiter;
 
 	public static void main(String[] args) throws Exception {
 		// Add BouncyCastle as a security provider
 
 		String dbFile = "totally_not_my_privateKeys.db";	
-		String secretKey = System.getenv("NOT_MY_KEY");
+		secretKey = System.getenv("NOT_MY_KEY");
+		if(secretKey == null) {
+			secretKey = "NeedToUpdateEnvs"; //8 *n legnth
+		}
 		
 		Database.createNewDatabase(dbFile);
 		
 		Database.loadKeyPairs(keyPairs, dbFile);
 		
+
+
 		System.out.println("keyPairs size " + keyPairs.size());
 		AuthEndpoint authEndPoint = new AuthEndpoint();
 		int expired =0;
@@ -67,6 +74,7 @@ public class JwtsServer {
 			AuthEndpoint.issueJwtToken(kp, username, expTimeNotExpire);		
 		}
 		
+		System.out.println("DB load done");
 		
 		// Create an HTTP server on port 8080
 		HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
@@ -76,11 +84,23 @@ public class JwtsServer {
 
 		// Create auth endpoint
 		server.createContext("/auth", authEndPoint);
-		// server.createContext("/auth", new JWKSEndpoint());
+
+		server.createContext("/register", new RegisterEndPoint() );
 
 		server.setExecutor(null); // Default executor
 		server.start();
-		
+		rateLimiter = new TimeWindowRateLimiter();	
+	    
+		/*for(int i=0; i<30; i++) {
+	            if(rateLimiter.allowRequest()) {
+	                System.out.println("success");
+	            }else {
+	                System.out.println("Rate exceed");
+	            }
+
+	            Thread.sleep(50);
+	        }
+	        */
 	}
 
 
@@ -147,23 +167,6 @@ public class JwtsServer {
 	    // Convert the JWKS JSON object to a string
 	    System.out.println( jwksObject.toString());
 	    return jwksObject.toString();
-	}
-	
-	private static SecretKey generateAESKey(String secretKey) {
-		SecureRandom random = new SecureRandom(secretKey.getBytes());
-		SecretKey rs = null;
-		
-		try {
-			KeyGenerator keyGen = KeyGenerator.getInstance("AES");
-			assertNotNull(keyGen);
-			keyGen.init(256, random);
-			rs = keyGen.generateKey();
-		} catch (NoSuchAlgorithmException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		
-		return rs;		
 	}
 
 	

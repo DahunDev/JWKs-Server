@@ -23,11 +23,11 @@ public class MyTest {
 		SignatureAlgorithm signatureAlgorithm = SignatureAlgorithm.RS256;
 		 KeyPairGenerator keyGenerator = KeyPairGenerator.getInstance("RSA");
 		 KeyPair keypair = keyGenerator.generateKeyPair();
-		 RSAPublicKey publicKey = (RSAPublicKey) keypair.getPublic();
-	     RSAPrivateKey privateKey = (RSAPrivateKey) keypair.getPrivate();
+
 	     long time = System.currentTimeMillis() + 3600 * 60 * 1000L;
 ;
 	     Date exp = new Date(time);
+	     JwtsServer.secretKey = "NeedToUpdateEnvs";
     	KeyPairInfo testPair = new KeyPairInfo(keypair.getPublic(), keypair.getPrivate(), 1, exp);
     	assertEquals(testPair.getKid(), 1);
     	assertEquals(testPair.getExpiry(), exp);
@@ -47,6 +47,20 @@ public class MyTest {
 	    
 	    Database.createNewDatabase("totally_not_my_privateKeys.db");
 	    Database.loadKeyPairs(new HashMap<Integer, KeyPairInfo>(), "totally_not_my_privateKeys.db");
-	   
+	    
+	    String password = "testPW";
+	   String testhash = Database.hashingPW(password); 
+	   String testhash2 = Database.hashingPW(password); 
+
+	   assertTrue(testhash.equals(testhash2));
+	   long currTime = System.currentTimeMillis();
+	   Database.updateAuthLogs("totally_not_my_privateKeys.db", "127.0.2.1", 1, currTime);
+	   Database.updateUserDB("totally_not_my_privateKeys.db", "testName", "email@gmai.com", password, currTime);
+	   try {
+		JwtsServer.main(null);
+	} catch (Exception e) {
+		// TODO Auto-generated catch block
+		e.printStackTrace();
+	}
     }	
 }

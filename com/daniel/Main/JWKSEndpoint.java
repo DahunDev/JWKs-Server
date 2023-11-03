@@ -1,6 +1,8 @@
 package com.daniel.Main;
 
 
+import static org.junit.Assert.assertNotNull;
+
 import java.io.IOException;
 import java.io.OutputStream;
 
@@ -17,16 +19,14 @@ import com.sun.net.httpserver.HttpHandler;
 			String para = exchange.getRequestURI().getQuery();
 			//System.out.println("requestPath in JWKS: " + requestPath);
 			//System.out.println("MEthod in JWKS: " + exchange.getRequestMethod());
-			System.out.println("Parameter in JWKS: " + para);
+			//System.out.println("Parameter in JWKS: " + para);
 
 			if ("GET".equals(exchange.getRequestMethod())) {
 				// Filter keys based on expiration
 
 		            // Convert the JWKS JSON object to a string
 		            String jwksJson = JwtsServer.generateJwksJson();
-		            
-		       //     System.out.println("jwksJson: " + jwksJson);
-		            // Send JWKS response with a status code and the JWKS JSON in the response body
+		            assertNotNull(jwksJson);
 		            exchange.getResponseHeaders().set("Content-Type", "application/json");
 
 		            byte[] responseBytes = jwksJson.getBytes("UTF-8");
